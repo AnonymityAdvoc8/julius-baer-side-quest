@@ -1,0 +1,86 @@
+services:
+  # Core Banking API Server
+  banking-server:
+    image: singhacksbjb/sidequest-server:latest
+    container_name: banking-server
+    ports:
+      - "8123:8123"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8123/accounts/validate/ACC1000 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - banking-network
+    restart: unless-stopped
+
+  # Banking Client
+  banking-client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: banking-client
+    depends_on:
+      banking-server:
+        condition: service_healthy
+    environment:
+      - API_BASE_URL=http://banking-server:8123
+      - ENABLE_AUTHENTICATION=${ENABLE_AUTHENTICATION:-false}
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-password123}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      - banking-network
+    # Override entrypoint for flexibility
+    entrypoint: []
+    # Keep container running for interactive commands
+    stdin_open: true
+    tty: true
+    # Default command shows help
+    command: ["python", "main.py", "--help"]
+
+networks:
+  banking-network:
+    driver: bridge
+    name: banking-network
+
+# =============================================================================
+# Usage Examples:
+# =============================================================================
+# 
+# Start all services:
+#   docker-compose up -d
+# 
+# Run a transfer:
+#   docker-compose run --rm banking-client transfer --from ACC1000 --to ACC1001 --amount 100
+# 
+# Run with authentication:
+#   ENABLE_AUTHENTICATION=true docker-compose run --rm banking-client transfer --from ACC1000 --to ACC1001 --amount 50
+# 
+# Validate account:
+#   docker-compose run --rm banking-client validate --account ACC1000
+# 
+# List accounts:
+#   docker-compose run --rm banking-client list
+# 
+# Run demo:
+#   docker-compose run --rm banking-client python example_usage.py
+# 
+# Run health check:
+#   docker-compose run --rm banking-client python health_check.py --verbose
+# 
+# View server logs:
+#   docker-compose logs -f banking-server
+# 
+# View client logs:
+#   docker-compose logs -f banking-client
+# 
+# Stop all services:
+#   docker-compose down
+# 
+# Rebuild client:
+#   docker-compose build banking-client
+# 
+# Start with custom environment:
+#   ENABLE_AUTHENTICATION=true AUTH_USERNAME=myuser docker-compose up
